@@ -3,7 +3,7 @@ import sys
 import threading
 import time
 
-if len(sys.argv) != 5:
+if len(sys.argv) != 6:
     print("Numero de parametros no valido.")
     sys.exit(1)
 
@@ -12,7 +12,7 @@ port_monitor = int(sys.argv[1])
 ip_central = sys.argv[2]
 port_central = int(sys.argv[3])
 ID = sys.argv[4]
-localizacion = ""
+localizacion = sys.argv[5]
 estado = "desconectado"  # Estado inicial del sistema de riego
 resultado_autenticacion = ""
 autenticacion_recibida = threading.Event()
@@ -112,23 +112,7 @@ def servir_engine():
         print(f"Error en el servidor para el engine: {error}")
         sys.exit(1)
 
-print("+--------------------------------+")
-print("|Selecciona localización del WS  |")
-print("+--------------------------------+")
-print("1. Parque")
-print("2. Jardin") 
-print("3. Ciudad") 
-op = input("Opcion: ")
-match op:
-    case "1":
-        localizacion = "Parque"
-    case "2":
-        localizacion = "Jardin"
-    case "3":
-        localizacion = "Ciudad"
-    case _:
-        print("Opcion no valida. Saliendo.")
-        sys.exit(1)
+
 threading.Thread(target=escuchar_central, daemon=True).start()
 servir_engine()
 if cerrar_monitor.is_set():
