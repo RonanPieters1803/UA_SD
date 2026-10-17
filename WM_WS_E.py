@@ -9,8 +9,8 @@ from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import KafkaError
 
 #Nombres de los topics de Kafka
-COMMANDS_TOPIC = "riego.comandos"
-TELEMETRY_TOPIC = "riego.telemetria"
+COMM_TOP = "riego.comandos"
+TELE_TOP = "riego.telemetria"
 
 # Variables globales de los argumentos de entrada.
 if len(sys.argv) != 6:
@@ -68,7 +68,7 @@ def enviar_telemetria(operario: str, segundo: int) -> None:
     }
     try:
         productor_kafka.send(
-            TELEMETRY_TOPIC,
+            TELE_TOP,
             value=json.dumps(
                 mensaje, ensure_ascii=False, allow_nan=False
             ).encode("utf-8"),
@@ -211,7 +211,7 @@ def escuchar_kafka() -> None:
             request_timeout_ms=10000,
         )
         consumidor = KafkaConsumer(
-            COMMANDS_TOPIC,
+            COMM_TOP,
             bootstrap_servers=brokers,
             group_id=f"engine-{ID}",
             auto_offset_reset="latest",
@@ -221,7 +221,7 @@ def escuchar_kafka() -> None:
         print(f"No se pudo conectar con Kafka: {error}")
         sys.exit(1)
 
-    print(f"Escuchando ordenes en Kafka topic {COMMANDS_TOPIC}.")
+    print(f"Escuchando ordenes en Kafka topic {COMM_TOP}.")
     try:
         for registro in consumidor:
             try:
