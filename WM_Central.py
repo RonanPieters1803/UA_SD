@@ -19,6 +19,61 @@ TOPIC_WS_EVENTS = "wm_ws_events"        # Engine  -> CENTRAL
 TOPIC_WS_STATUS = "wm_ws_status"        # CENTRAL -> todos (estado de las WS)
 ALL_TOPICS = [TOPIC_FO_REQUESTS, TOPIC_FO_EVENTS, TOPIC_WS_COMMANDS, TOPIC_WS_EVENTS, TOPIC_WS_STATUS]
 
+#### ESTADOS DE LAS ESTACIONES
+AVAILABLE = "DISPONIBLE"
+WATERING = "REGANDO"
+LEAK = "FUGA"
+OUT_OF_SERVICE = "FUERA_DE_SERVICIO"
+OFFLINE = "DESCONECTADA"
+
+#### DURACIONES POR DEFECTO
+DEFAULT_DURATION = 30
+MAX_DURATION = 3600
+
+#### CARACTERES DEL SOCKET
+STX, ETX, ENQ, ACK, NACK, EOT = 0x02, 0x03, 0x05, 0x06, 0x15, 0x04
+
+def lrc(data:bytes) -> int: #LCR = XOR de todos los bytes del mensaje
+    r = 0
+    for b in data:
+        r ^= b
+    return r
+
+def build_frame(text: str) -> bytes:
+    data = text.encode("utf-8")
+    return bytes([STX]) + data + bytes([ETX, lrc(data)])
+
+
+#### CLASES NECESARIAS
+class MonitorConnection: #Connection TCP con una WS
+    def __init(self, sock):
+        self.sock = sock
+        self.reader = sock.makefile("rb")
+        self.ws_id = None
+
+    def read_byte(self) -> int:
+        b = self.reader.read(1)
+        if not b:
+            raise ConnectionError("Conexión cerrada")
+        return b[0]
+
+    def read_frame_body(self):
+        data = bytearray()
+        while True:
+            b = self.read_byte()
+            if b == ETX:
+                break
+            data.append(b)
+        return bytes(data), self.read_byte()
+
+    def close(self):
+        for closer in (self.reader.close, self.sock.close):
+            try:
+                closer()
+            except OSError:
+                pass
+
+
 class DataBase:
     def __init__(self, path): #inicializar sqlite con 3 tablas: operators, watering_stations, irrigations si aun no existen
         folder = os.path.dirname(path)
@@ -117,3 +172,76 @@ class KafkaBus:
             except Exception as e:
                 self.log(f"Consumidor de Kafka falló: {e}, reintentando en 3 segundos...")
                 time.sleep(3)
+
+class Station:
+    def __init__(self, ws_id, location, blocked=False):
+        self.ws_id = ws_id
+        self.location = location
+        self.blocked = blocked
+        self.conn = None #MonitorConnection mientras esté conectada, None si no lo está
+        self.leak = None
+        self.flow = 0.0
+        self.volume = 0.0
+        self.session = None #Sesión de riego actual, None si no hay riego
+        self.pending = None
+
+    @property
+    def connected(self):
+        return self.conn is not None
+
+    @property
+    def status(self):
+        if not self.connected:
+            return OFFLINE
+        if self.leak:
+            return LEAK
+        if self.blocked:
+            return OUT_OF_SERVICE
+        if self.session:
+            return WATERING
+        return AVAILABLE
+
+    def normalize_duration(value):
+        try:
+            d = int(value)
+        except (TypeError, ValueError):
+            return DEFAULT_DURATION
+        return d if 0 < d <= MAX_DURATION else DEFAULT_DURATION
+
+class Central:
+    def __innit__(self, db, bus):
+        self.db = db
+        self.bus = bus
+        self.lock = threading.RLock()
+        self.stations = {}
+        self.messages = deque(maxlen=200)
+        self._load_stations()
+
+####FUNCIONES ÚTILES
+def log(self, text):
+    line = f"[{datetime.now().strftime('%H:%M:%S')}] {text}"
+    with self.lock:
+        self.messages.append(line)
+    print(line, flush=True)
+
+def _publish(self, topic, payload):
+    try:
+        self.bus.publish(topic, payload)
+    except Exception as e:
+        self.log(f"Error publicando en {topic}: {e}")
+
+def _load_stations(self): #Al iniciar las WS conocidas deben apareces DESCONECTADAS hasta que Monitor se conecte
+    for row in self.db.query("SELECT id, location, blocked FROM watering_stations"):
+        self.station[row["id"]] = Station(row["id"], row["location"], bool(row["blocked"]))
+    self.log(f"Central iniciada: {len(self.stations)} WS en BD")
+
+def add_operators(self, ids):
+    for op in ids:
+        op = op.strip()
+        if op:
+            self.db.execute("INSERT OR IGNORE INTO operators(id, name) VALUES (?, ?)", (op, op))
+        self.log(f"Operarios dados de alta: "+", " .join(r["id"] for r in self.db.query("SELECT id FROM operators ORDER BY id")))
+
+def operator_exists(self, id):
+    return bool(self.db.query("SELECT 1 FROM operators WHERE id = ?", (id,)))
+
