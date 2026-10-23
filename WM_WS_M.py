@@ -21,6 +21,7 @@ engine_funcionando = threading.Event()
 engine_averiado = threading.Event()
 conexion_central_activa = None
 envio_central_lock = threading.Lock()
+engine_recuperado_pendiente = threading.Event()
 
 # Constantes del protocolo de tramas
 STX = b'\x02'
@@ -75,36 +76,56 @@ def recibir_trama(sock: socket.socket) -> str:
 
 def enviar_estado_central(conexion_central, estado):
     with envio_central_lock:
-        if (
-            conexion_central is None
-            or conexion_central_activa is not conexion_central
-        ):
-            return False
-        if estado == "OK" and not engine_funcionando.is_set():
-            return True
+        return _enviar_estado_central_bloqueado(conexion_central, estado)
 
-        try:
-            conexion_central.sendall(f"{estado}\n".encode("utf-8"))
-            print(f"Estado {estado} del engine enviado a la central.")
-            return True
-        except OSError as error:
-            print(f"No se pudo enviar el estado {estado} a la central: {error}")
-            return False
+
+def _enviar_estado_central_bloqueado(conexion_central, estado):
+    if (
+        conexion_central is None
+        or conexion_central_activa is not conexion_central
+    ):
+        return False
+    if estado == "OK" and not engine_funcionando.is_set():
+        return True
+
+    try:
+        conexion_central.sendall(f"{estado}\n".encode("utf-8"))
+        print(f"Estado {estado} del engine enviado a la central.")
+        return True
+    except OSError as error:
+        print(f"No se pudo enviar el estado {estado} a la central: {error}")
+        return False
 
 
 def enviar_heartbeat_central(conexion_central):
     while not cerrar_monitor.wait(1):
-        # Transmite activamente el estado a la Central cada segundo
-        estado_a_enviar = "KO" if engine_averiado.is_set() else "OK"
-        if not enviar_estado_central(conexion_central, estado_a_enviar):
-            break
+        with envio_central_lock:
+            if engine_recuperado_pendiente.is_set():
+                estado_a_enviar = "LEAK_END"
+            else:
+                estado_a_enviar = "LEAK" if engine_averiado.is_set() else "OK"
+            if not _enviar_estado_central_bloqueado(
+                conexion_central, estado_a_enviar
+            ):
+                break
+            if estado_a_enviar == "LEAK_END":
+                engine_recuperado_pendiente.clear()
 
 
 def declarar_engine_averiado():
     engine_funcionando.clear()
     if not engine_averiado.is_set():
         engine_averiado.set()
-        enviar_estado_central(conexion_central_activa, "KO")
+        enviar_estado_central(conexion_central_activa, "LEAK")
+
+
+def declarar_engine_recuperado(conexion_central):
+    with envio_central_lock:
+        if engine_averiado.is_set():
+            engine_averiado.clear()
+            engine_recuperado_pendiente.set()
+            if _enviar_estado_central_bloqueado(conexion_central, "LEAK_END"):
+                engine_recuperado_pendiente.clear()
 
 
 def escuchar_central():
@@ -144,7 +165,7 @@ def escuchar_central():
                                     ).start()
                                     if engine_averiado.is_set():
                                         enviar_estado_central(
-                                            central_socket, "KO"
+                                            central_socket, "LEAK"
                                         )
                                 case "KO":
                                     resultado_autenticacion = instruccion
@@ -233,7 +254,9 @@ def servir_engine():
                                                 print(
                                                     f"Engine {ID} restablecido."
                                                 )
-                                                engine_averiado.clear()
+                                                declarar_engine_recuperado(
+                                                    conexion_central_activa
+                                                )
                                         case "KO":
                                             print(
                                                 f"Engine {ID} averiado (KO)."
