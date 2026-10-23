@@ -370,8 +370,6 @@ def handle_monitor_message(self, text, conn):
             return "KO#no autenticado", False
         if len(parts) > 1 and parts[1].strip() != conn.ws_id:
             return "KO#id no coincide con la sesión", True
-        if op == "PING":
-            return "OK", True
         if op == "LEAK":
             self.on_leak(conn.ws_id)
             return "OK", True
@@ -657,6 +655,158 @@ def on_leak_end(self, ws_id):
                 raise EOFError
             if b != NACK:
                 return
+
+
+PANEL_HTML = r"""<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WM_Central</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#0b1620;color:#dfe9f0}
+header{padding:14px 16px;border-bottom:1px solid #1f3342}
+h1{margin:0 0 10px;font-size:20px} h1 span{font-weight:400;color:#8aa3b5}
+h2{margin:0 0 8px;font-size:14px;color:#8aa3b5;text-transform:uppercase;letter-spacing:.05em}
+main{padding:16px;display:grid;gap:16px;max-width:1100px;margin:0 auto}
+.card{background:#10212e;border:1px solid #1f3342;border-radius:10px;padding:14px}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;margin:0 6px 6px 0;font-size:13px;font-weight:600;color:#fff}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+input{width:80px;padding:6px;border-radius:6px;border:1px solid #2a4458;background:#0b1620;color:inherit}
+button{padding:6px 12px;border-radius:6px;border:1px solid #2a4458;background:#183247;color:inherit;cursor:pointer}
+button:hover{background:#21465f}
+.wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th,td{padding:8px;border-bottom:1px solid #1f3342;text-align:left;font-size:14px}
+th{color:#8aa3b5;font-weight:600} td.num{font-variant-numeric:tabular-nums}
+.acts{white-space:nowrap} .acts button{margin-right:4px;padding:4px 8px;font-size:12px}
+.st{padding:4px 10px;border-radius:6px;font-weight:700;text-align:center;color:#fff;min-width:130px}
+.ok{background:#2e9e4f}
+.watering{background:#2e9e4f;animation:blink 1s infinite}
+@keyframes blink{50%{background:#9be8b2;color:#0b1620}}
+.leak{background:#d63b3b}
+.oos{background:#e8891c}
+.off{background:#6b7480}
+pre{margin:0;max-height:260px;overflow:auto;font-size:12px;line-height:1.5;background:#08121a;padding:10px;border-radius:6px;white-space:pre-wrap}
+#flash{color:#9be8b2;font-size:13px}
+</style></head>
+<body>
+<header><h1>WaterManagement <span>· Panel de CENTRAL</span></h1><div id="pills"></div></header>
+<main>
+<section class="card">
+<div class="bar">
+<label>Duración riego (s) <input id="dur" type="number" min="1" max="3600" value="30"></label>
+<button data-a="START" data-w="ALL">Regar todas</button>
+<button data-a="BLOCK" data-w="ALL">Bloquear todas</button>
+<button data-a="ACTIVATE" data-w="ALL">Activar todas</button>
+<span id="flash"></span>
+</div>
+<div class="wrap"><table>
+<thead><tr><th>ID</th><th>Ubicación</th><th>Estado</th><th>Caudal (L/min)</th><th>Volumen (L)</th><th>Operario</th><th>Acciones</th></tr></thead>
+<tbody id="rows"></tbody></table></div>
+</section>
+<section class="card"><h2>Mensajes de la aplicación</h2><pre id="log"></pre></section>
+</main>
+<script>
+let token = sessionStorage.getItem('wm_token') || '';
+let timer = null;
+const LABEL = {DISPONIBLE:'Disponible', REGANDO:'Regando', FUGA:'Fuga', FUERA_DE_SERVICIO:'Fuera de Servicio', DESCONECTADA:'Desconectada'};
+const CLS = {DISPONIBLE:'ok', REGANDO:'watering', FUGA:'leak', FUERA_DE_SERVICIO:'oos', DESCONECTADA:'off'};
+const $ = id => document.getElementById(id);
+function el(tag, cls, text){const e=document.createElement(tag); if(cls) e.className=cls; if(text!==undefined) e.textContent=text; return e;}
+async function api(path, body){
+  const opts = {headers:{'X-Token':token,'Content-Type':'application/json'}};
+  if(body){opts.method='POST'; opts.body=JSON.stringify(body);}
+  const r = await fetch(path, opts);
+  if(r.status===401){
+    clearInterval(timer);
+    const t = prompt('Token del panel:');
+    if(t){sessionStorage.setItem('wm_token',t); token=t; timer=setInterval(refresh,1000);}
+    throw new Error('no autorizado');
+  }
+  return r.json();
+}
+function flash(t){$('flash').textContent=t; setTimeout(()=>{if($('flash').textContent===t) $('flash').textContent='';},4000);}
+async function command(action, ws){
+  try{const r=await api('/api/command',{action:action, ws_id:ws, duration:parseInt($('dur').value)||30}); flash(r.message);}
+  catch(e){flash(String(e));}
+  refresh();
+}
+function render(s){
+  const pills=$('pills'); pills.replaceChildren();
+  for(const k of Object.keys(LABEL)) pills.appendChild(el('span','pill '+CLS[k], LABEL[k]+': '+(s.summary[k]||0)));
+  const rows=$('rows'); rows.replaceChildren();
+  if(!s.stations.length){const tr=el('tr'); const td=el('td',null,'Sin estaciones registradas'); td.colSpan=7; tr.appendChild(td); rows.appendChild(tr);}
+  for(const w of s.stations){
+    const tr=el('tr'); const watering = w.status==='REGANDO';
+    tr.appendChild(el('td',null,w.ws_id)); tr.appendChild(el('td',null,w.location));
+    const td=el('td'); td.appendChild(el('div','st '+(CLS[w.status]||''), LABEL[w.status]||w.status)); tr.appendChild(td);
+    tr.appendChild(el('td','num', watering? w.flow.toFixed(1):'-'));
+    tr.appendChild(el('td','num', watering? w.volume.toFixed(1):'-'));
+    tr.appendChild(el('td',null, watering? w.operator_id:'-'));
+    const act=el('td','acts');
+    for(const [a,l] of [['START','Regar'],['BLOCK','Bloquear'],['ACTIVATE','Activar']]){
+      const b=el('button',null,l); b.onclick=()=>command(a,w.ws_id); act.appendChild(b);
+    }
+    tr.appendChild(act); rows.appendChild(tr);
+  }
+  const log=$('log'); const atEnd = log.scrollTop+log.clientHeight >= log.scrollHeight-20;
+  log.textContent = s.messages.join('\n'); if(atEnd) log.scrollTop=log.scrollHeight;
+}
+async function refresh(){ try{ render(await api('/api/state')); }catch(e){} }
+document.querySelectorAll('button[data-a]').forEach(b=>b.onclick=()=>command(b.dataset.a,b.dataset.w));
+refresh(); timer=setInterval(refresh,1000);
+</script></body></html>
+"""
+
+class PanelHandler(BaseHTTPRequestHandler):
+    central = None
+    token = None
+ 
+    def log_message(self, *args):
+        pass
+ 
+    def _send(self, code, body, ctype="application/json"):
+        if not isinstance(body, bytes):
+            body = json.dumps(body).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", ctype + "; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+ 
+    def _authorized(self):
+        if not self.token:
+            return True
+        return hmac.compare_digest(self.headers.get("X-Token", ""), self.token)
+ 
+    def do_GET(self):
+        path = self.path.split("?")[0]
+        if path == "/":
+            self._send(200, PANEL_HTML.encode("utf-8"), "text/html")
+        elif path == "/api/state":
+            if not self._authorized():
+                return self._send(401, {"error": "no autorizado"})
+            self._send(200, self.central.panel_state())
+        else:
+            self._send(404, {"error": "no encontrado"})
+ 
+    def do_POST(self):
+        if self.path.split("?")[0] != "/api/command":
+            return self._send(404, {"error": "no encontrado"})
+        if not self._authorized():
+            return self._send(401, {"error": "no autorizado"})
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > 4096:
+                return self._send(413, {"error": "petición demasiado grande"})
+            body = json.loads(self.rfile.read(length) or b"{}")
+            ok, message = self.central.admin_command(
+                body.get("action"), str(body.get("ws_id", "")), body.get("duration"))
+            self._send(200 if ok else 400, {"ok": ok, "message": message})
+        except (ValueError, TypeError):
+            self._send(400, {"ok": False, "message": "JSON no válido"})
 
 def start_panel(central, port, token=None):
     handler = type("BoundPanelHandler", (PanelHandler,), {"central": central, "token": token})
