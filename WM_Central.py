@@ -100,15 +100,15 @@ class DataBase:
         with self.lock:
             self.conn.executescript("""
                 CREATE TABLE IF NOT EXISTS operators (
-                    id TEXT PRIMARY KEY,
-                    name TEXT 
+                    id   TEXT PRIMARY KEY,
+                    name TEXT
                 );
                 CREATE TABLE IF NOT EXISTS watering_stations (
                     id            TEXT PRIMARY KEY,
                     location      TEXT NOT NULL,
                     blocked       INTEGER NOT NULL DEFAULT 0,
                     registered_at TEXT
-                    );
+                );
                 CREATE TABLE IF NOT EXISTS irrigations (
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
                     ws_id       TEXT,
@@ -118,8 +118,8 @@ class DataBase:
                     ended_at    TEXT,
                     duration_s  REAL,
                     volume_l    REAL,
-                    end_reason  TEXT,
-                    );
+                    end_reason  TEXT
+                );
             """)
             self.conn.commit()
 
