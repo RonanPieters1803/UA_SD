@@ -9,8 +9,8 @@ from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import KafkaError
 
 #Nombres de los topics de Kafka
-REQUEST_TOPIC = "operator.request"
-RESPONSE_TOPIC = "operator.response"
+TOPIC_FO_REQUESTS = "wm_fo_requests"
+TOPIC_FO_EVENTS = "wm_fo_events" 
 
 APP_NAME = "WM_FO"
 WAIT_BETWEEN_SERVICES = 4  # Tiempo de espera entre solicitudes en segundos
