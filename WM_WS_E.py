@@ -176,6 +176,7 @@ def simular_averia() -> None:
 def menu_operario() -> None:
     print("\n--- MENU DE CONTROL LOCAL ---")
     print("  'averia'      -> Simular averia del Engine")
+    print("  'recuperar'   -> Recuperar el Engine tras una averia")
     print("  'on'          -> Habilitar el sistema")
     print("  'off'         -> Deshabilitar el sistema")
     print("  'start'       -> Iniciar riego sin limite")
@@ -183,7 +184,7 @@ def menu_operario() -> None:
     print("  'stop'        -> Detener el riego")
     print("-----------------------------\n")
     
-    while not averia_engine.is_set():
+    while True:
         try:
             opcion = input("Engine> ").strip().lower()
         except EOFError:
@@ -198,7 +199,14 @@ def menu_operario() -> None:
 
         if comando == "averia":
             simular_averia()
-            return
+        elif comando == "recuperar":
+            if averia_engine.is_set():
+                averia_engine.clear()
+                print("Engine recuperado; esperando confirmacion del monitor.")
+            else:
+                print("El Engine no esta averiado.")
+        elif averia_engine.is_set():
+            print("El Engine esta averiado. Usa 'recuperar' para restablecerlo.")
         elif comando in ["on", "off", "stop"]:
             mensaje = {"instruccion": comando.upper(), "id_operario": "operario_local"}
             procesar_instruccion_kafka(mensaje)
@@ -213,13 +221,16 @@ def menu_operario() -> None:
                     continue
             procesar_instruccion_kafka(mensaje)
         else:
-            print("Comando no reconocido. Opciones: averia, on, off, start [seg], stop.")
+            print(
+                "Comando no reconocido. Opciones: averia, recuperar, on, off, "
+                "start [seg], stop."
+            )
 
 
 def responder_heartbeat() -> None:
     global ID, monitor_socket
 
-    while not averia_engine.is_set():
+    while True:
         if monitor_socket is None:
             nuevo_socket = None
             try:
@@ -495,8 +506,10 @@ def escuchar_kafka() -> None:
 
     print(f"Escuchando ordenes en Kafka topic {COMM_TOP}.")
     try:
-        while not averia_engine.is_set():
+        while True:
             registros = consumidor.poll(timeout_ms=1000)
+            if averia_engine.is_set():
+                continue
             for particion_registros in registros.values():
                 for registro in particion_registros:
                     try:
