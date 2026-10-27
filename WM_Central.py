@@ -143,7 +143,7 @@ class KafkaBus:
         self.producer = KafkaProducer(
             bootstrap_servers=bootstrap,
             value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode("utf-8"), #Crear un productor de Kafka que convierte los mensajes a JSON y los codifica en UTF-8
-            ack="all",
+            acks="all",
             retries=3,
         )
 
