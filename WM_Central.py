@@ -297,6 +297,9 @@ class Central:
                 })
             return out
 
+    def publish_status(self):
+        self._publish(TOPIC_WS_STATUS, {"ts": time.time(), "stations": self.snapshot()})
+
     def panel_state(self):
         stations = self.snapshot()
         summary = {}
