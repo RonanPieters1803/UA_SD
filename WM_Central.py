@@ -62,7 +62,7 @@ def build_frame(text: str) -> bytes:
 
 #### CLASES NECESARIAS
 class MonitorConnection: #Connection TCP con una WS
-    def __init(self, sock):
+    def __init__(self, sock):
         self.sock = sock
         self.reader = sock.makefile("rb")
         self.ws_id = None
@@ -142,12 +142,12 @@ class KafkaBus:
         self.log = log
         self.producer = KafkaProducer(
             bootstrap_servers=bootstrap,
-            value_serializer=lambda v: json.dumps(v.encode('utf-8')), #Crear un productor de Kafka que convierte los mensajes a JSON y los codifica en UTF-8
+            value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode("utf-8"), #Crear un productor de Kafka que convierte los mensajes a JSON y los codifica en UTF-8
             ack="all",
             retries=3,
         )
 
-    def esure_topics(self): #Crear los topics de Kafka si no existen, ignorando el error si ya existen
+    def ensure_topics(self): #Crear los topics de Kafka si no existen, ignorando el error si ya existen
         try:
             from kafka.admin import KafkaAdminClient, NewTopic
             from kafka.errors import TopicAlreadyExistsError
@@ -225,7 +225,7 @@ def normalize_duration(value):
     return d if 0 < d <= MAX_DURATION else DEFAULT_DURATION
 
 class Central:
-    def __innit__(self, db, bus):
+    def __init__(self, db, bus):
         self.db = db
         self.bus = bus
         self.lock = threading.RLock()
@@ -234,43 +234,43 @@ class Central:
         self._load_stations()
 
 ####FUNCIONES ÚTILES
-def log(self, text):
-    line = f"[{datetime.now().strftime('%H:%M:%S')}] {text}"
-    with self.lock:
-        self.messages.append(line)
-    print(line, flush=True)
+    def log(self, text):
+        line = f"[{datetime.now().strftime('%H:%M:%S')}] {text}"
+        with self.lock:
+            self.messages.append(line)
+        print(line, flush=True)
 
-def _publish(self, topic, payload):
-    try:
-        self.bus.publish(topic, payload)
-    except Exception as e:
-        self.log(f"Error publicando en {topic}: {e}")
+    def _publish(self, topic, payload):
+        try:
+            self.bus.publish(topic, payload)
+        except Exception as e:
+            self.log(f"Error publicando en {topic}: {e}")
 
-def _load_stations(self): #Al iniciar las WS conocidas deben apareces DESCONECTADAS hasta que Monitor se conecte
-    for row in self.db.query("SELECT id, location, blocked FROM watering_stations"):
-        self.station[row["id"]] = Station(row["id"], row["location"], bool(row["blocked"]))
-    self.log(f"Central iniciada: {len(self.stations)} WS en BD")
+    def _load_stations(self): #Al iniciar las WS conocidas deben apareces DESCONECTADAS hasta que Monitor se conecte
+        for row in self.db.query("SELECT id, location, blocked FROM watering_stations"):
+            self.stations[row["id"]] = Station(row["id"], row["location"], bool(row["blocked"]))
+        self.log(f"Central iniciada: {len(self.stations)} WS en BD")
 
-def add_operators(self, ids):
-    for op in ids:
-        op = op.strip()
-        if op:
-            self.db.execute("INSERT OR IGNORE INTO operators(id, name) VALUES (?, ?)", (op, op))
-        self.log(f"Operarios dados de alta: "+", " .join(r["id"] for r in self.db.query("SELECT id FROM operators ORDER BY id")))
+    def add_operators(self, ids):
+        for op in ids:
+            op = op.strip()
+            if op:
+                self.db.execute("INSERT OR IGNORE INTO operators(id, name) VALUES (?, ?)", (op, op))
+            self.log(f"Operarios dados de alta: "+", " .join(r["id"] for r in self.db.query("SELECT id FROM operators ORDER BY id")))
 
-def operator_exists(self, id):
-    return bool(self.db.query("SELECT 1 FROM operators WHERE id = ?", (id,)))
+    def operator_exists(self, id):
+        return bool(self.db.query("SELECT 1 FROM operators WHERE id = ?", (id,)))
 
 ####Eventos para FO
-def fo_event(self, operator_id, request_id, ws_id, event, msg, final=False, log=True, **extra):
-    if log:
-        self.log(f"[{operator_id}] {ws_id}: {msg}")
-    if operator_id in INTERNAL_OPERATORS:
+    def fo_event(self, operator_id, request_id, ws_id, event, msg, final=False, log=True, **extra):
+        if log:
+            self.log(f"[{operator_id}] {ws_id}: {msg}")
+        if operator_id in INTERNAL_OPERATORS:
             return
-    payload = {"request_id": request_id, "operator_id": operator_id, "ws_id": ws_id,
-                   "event": event, "message": msg, "final": final, "ts": time.time()}
-    payload.update(extra)
-    self._publish(TOPIC_FO_EVENTS, payload)
+        payload = {"request_id": request_id, "operator_id": operator_id, "ws_id": ws_id,
+                       "event": event, "message": msg, "final": final, "ts": time.time()}
+        payload.update(extra)
+        self._publish(TOPIC_FO_EVENTS, payload)
 
     def deny(self, operator_id, request_id, ws_id, message):
         self.fo_event(operator_id, request_id, ws_id, "DENIED", f"Riego DENEGADO: {message}", final=True)
@@ -281,7 +281,7 @@ def fo_event(self, operator_id, request_id, ws_id, event, msg, final=False, log=
         self._publish(TOPIC_WS_COMMANDS, payload)
 
 ####Estados del WS
-def snapshot(self):
+    def snapshot(self):
         with self.lock:
             out = []
             for st in sorted(self.stations.values(), key=lambda s: s.ws_id):
@@ -297,7 +297,7 @@ def snapshot(self):
                 })
             return out
 
-def panel_state(self):
+    def panel_state(self):
         stations = self.snapshot()
         summary = {}
         for s in stations:
@@ -306,19 +306,19 @@ def panel_state(self):
             messages = list(self.messages)[-80:]
         return {"stations": stations, "summary": summary, "messages": messages}
  
-def unavailable_reason(self, st):
-    if not st.connected:
-        return "la WS está desconectada"
-    if st.leak:
-        return "la WS presenta una fuga"
-    if st.blocked:
-        return "la WS está fuera de servicio"
-    if st.session or st.pending:
-        return "la WS está ocupada con otro riego"
-    return None
+    def unavailable_reason(self, st):
+        if not st.connected:
+            return "la WS está desconectada"
+        if st.leak:
+            return "la WS presenta una fuga"
+        if st.blocked:
+            return "la WS está fuera de servicio"
+        if st.session or st.pending:
+            return "la WS está ocupada con otro riego"
+        return None
 
 ###Registrar/autenticar WS
-def register_ws(self, ws_id, location, conn):
+    def register_ws(self, ws_id, location, conn):
         with self.lock:
             st = self.stations.get(ws_id)
             new = st is None
@@ -345,21 +345,21 @@ def register_ws(self, ws_id, location, conn):
             self.publish_status()
             return True, ("alta" if new else "autenticada")
  
-def ws_disconnected(self, ws_id, conn):
-    with self.lock:
-        st = self.stations.get(ws_id)
-        if st is None or st.conn is not conn:
-            return  # ya fue sustituida por otra conexión
-        st.conn = None
-        st.leak = False
-        self.log(f"{ws_id}: DESCONECTADA")
-        self._abort_pending(st, "la WS se ha desconectado")
-        self._close_session(st, "DESCONEXION")
-        st.flow = st.volume = 0.0
-        self.publish_status()
+    def ws_disconnected(self, ws_id, conn):
+        with self.lock:
+            st = self.stations.get(ws_id)
+            if st is None or st.conn is not conn:
+                return  # ya fue sustituida por otra conexión
+            st.conn = None
+            st.leak = False
+            self.log(f"{ws_id}: DESCONECTADA")
+            self._abort_pending(st, "la WS se ha desconectado")
+            self._close_session(st, "DESCONEXION")
+            st.flow = st.volume = 0.0
+            self.publish_status()
 
 ####Mensajes de monitor
-def handle_monitor_message(self, text, conn):
+    def handle_monitor_message(self, text, conn):
         parts = text.split("#")
         op = parts[0].strip().upper()
         if op == "REG":
@@ -379,27 +379,27 @@ def handle_monitor_message(self, text, conn):
             return "OK", True
         return f"KO#operación desconocida {op}", True
  
-def on_leak(self, ws_id):
-    with self.lock:
-        st = self.stations.get(ws_id)
-        if st is None:
-            return
-        st.leak = True
-        self.log(f"{ws_id}: FUGA detectada")
-        self._abort_pending(st, "fuga detectada en la WS")
-        if st.session:
-            self._close_session(st, "FUGA")
-            self.send_command(ws_id, "STOP", reason="FUGA")
-        self.publish_status()
+    def on_leak(self, ws_id):
+        with self.lock:
+            st = self.stations.get(ws_id)
+            if st is None:
+                return
+            st.leak = True
+            self.log(f"{ws_id}: FUGA detectada")
+            self._abort_pending(st, "fuga detectada en la WS")
+            if st.session:
+                self._close_session(st, "FUGA")
+                self.send_command(ws_id, "STOP", reason="FUGA")
+            self.publish_status()
  
-def on_leak_end(self, ws_id):
-    with self.lock:
-        st = self.stations.get(ws_id)
-        if st is None:
-            return
-        st.leak = False
-        self.log(f"{ws_id}: avería resuelta, la WS vuelve a estar {st.status}")
-        self.publish_status()
+    def on_leak_end(self, ws_id):
+        with self.lock:
+            st = self.stations.get(ws_id)
+            if st is None:
+                return
+            st.leak = False
+            self.log(f"{ws_id}: avería resuelta, la WS vuelve a estar {st.status}")
+            self.publish_status()
 
 ####Eventos de riego
     def start_irrigation(self, request_id, operator_id, ws_id, duration):
@@ -822,7 +822,7 @@ def main():
                    help="Puerto de escucha del servidor de sockets (Monitor de las WS)")
     p.add_argument("broker", nargs="?", default=env("KAFKA_BOOTSTRAP"),
                    help="IP:puerto del broker/bootstrap-server de Kafka")
-    p.add_argument("--db", default=env("DB_PATH", "wm_central.db"))
+    p.add_argument("--db", default=env("DB_PATH", "/app/data/wm_central.db"))
     p.add_argument("--web-port", type=int, default=int(env("PORT", 8080)))
     p.add_argument("--operators", default=env("OPERATORS", ""))
     p.add_argument("--panel-token", default=env("PANEL_TOKEN"))
