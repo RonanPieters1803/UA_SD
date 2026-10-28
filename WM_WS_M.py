@@ -24,52 +24,46 @@ envio_central_lock = threading.Lock()
 engine_recuperado_pendiente = threading.Event()
 
 # Constantes del protocolo de tramas
-STX = b'\x02'
-ETX = b'\x03'
+STX, ETX, ENQ, ACK, NACK, EOT = 0x02, 0x03, 0x05, 0x06, 0x15, 0x04
 
 # --- FUNCIONES DEL PROTOCOLO DE TRAMAS ---
 
+def lrc(data) -> int:
+    r = 0
+    for b in data:
+        r^=b
+    return r
+
 def empaquetar_trama(mensaje: str) -> bytes:
     datos = mensaje.encode('utf-8')
-    lrc = 0
-    for b in datos:
-        lrc ^= b
-    lrc ^= ETX[0]
-    return STX + datos + ETX + bytes([lrc])
+    return bytes([STX]) + datos + bytes([ETX], lrc(datos))
+
+
+def leer_byte(sock: socket.socket) -> int:
+    b = sock.recv(1)
+    if not b:
+        raise ConnectionError("Conexion cerrada")
+    return b[0]
 
 def recibir_trama(sock: socket.socket) -> str:
     # 1. Esperar STX
-    while True:
-        b = sock.recv(1)
-        if not b:
-            raise ConnectionError("Conexion cerrada esperando STX")
-        if b == STX:
-            break
+    while leer_byte(sock) != STX:
+        pass
             
     # 2. Leer datos hasta ETX
     datos = bytearray()
     while True:
-        b = sock.recv(1)
-        if not b:
-            raise ConnectionError("Conexion cerrada leyendo datos")
+        b = leer_byte(sock)
         if b == ETX:
             break
-        datos.extend(b)
+        datos.append(b)
         
     # 3. Leer LRC
-    lrc_recibido = sock.recv(1)
-    if not lrc_recibido:
-        raise ConnectionError("Conexion cerrada esperando LRC")
+    lrc_recibido = leer_byte(sock)
         
     # 4. Validar LRC
-    lrc_calculado = 0
-    for b in datos:
-        lrc_calculado ^= b
-    lrc_calculado ^= ETX[0]
-    
-    if lrc_calculado != lrc_recibido[0]:
+    if lrc(datos) != lrc_recibido:
         raise ValueError("Error LRC. Trama corrupta.")
-        
     return datos.decode('utf-8')
 
 # --- LOGICA PRINCIPAL DEL MONITOR ---
