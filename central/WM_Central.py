@@ -250,12 +250,18 @@ class Central: # Clase central que contiene la DB y KAFKA bus
             self.stations[row["id"]] = Station(row["id"], row["location"], bool(row["blocked"]))
         self.log(f"Central iniciada: {len(self.stations)} WS en BD")
 
-    def add_operators(self, ids):
-        for op in ids:
-            op = op.strip()
-            if op:
-                self.db.execute("INSERT OR IGNORE INTO operators(id, name) VALUES (?, ?)", (op, op))
-        self.log(f"Operarios dados de alta: "+", " .join(r["id"] for r in self.db.query("SELECT id FROM operators ORDER BY id")))
+    def add_operator(self, op_id):
+        op_id = str(op_id).strip()
+        if (not op_id or len(op_id) > 32
+                or not op_id.replace("_", "").replace("-", "").isalnum()
+                or op_id.upper() in INTERNAL_OPERATORS):
+            return False, "ID de operario no válido"
+        cur = self.db.execute(
+            "INSERT OR IGNORE INTO operators(id, name) VALUES (?, ?)", (op_id, op_id))
+        if cur.rowcount == 0:
+            return False, f"El operario {op_id} ya existe"
+        self.log(f"Operario dado de alta por API: {op_id}")
+        return True, f"Operario {op_id} creado"
 
     def operator_exists(self, id):
         return bool(self.db.query("SELECT 1 FROM operators WHERE id = ?", (id,)))
@@ -796,7 +802,8 @@ class PanelHandler(BaseHTTPRequestHandler):
             self._send(404, {"error": "no encontrado"})
  
     def do_POST(self):
-        if self.path.split("?")[0] != "/api/command":
+        path = self.path.split("?")[0]
+        if path not in ("/api/command", "/api/operators"):
             return self._send(404, {"error": "no encontrado"})
         if not self._authorized():
             return self._send(401, {"error": "no autorizado"})
@@ -805,8 +812,11 @@ class PanelHandler(BaseHTTPRequestHandler):
             if length > 4096:
                 return self._send(413, {"error": "petición demasiado grande"})
             body = json.loads(self.rfile.read(length) or b"{}")
-            ok, message = self.central.admin_command(
-                body.get("action"), str(body.get("ws_id", "")), body.get("duration"))
+            if path == "/api/operators":
+                ok, message = self.central.add_operator(body.get("operator_id", ""))
+            else:
+                ok, message = self.central.admin_command(
+                    body.get("action"), str(body.get("ws_id", "")), body.get("duration"))
             self._send(200 if ok else 400, {"ok": ok, "message": message})
         except (ValueError, TypeError):
             self._send(400, {"ok": False, "message": "JSON no válido"})
