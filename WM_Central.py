@@ -4,7 +4,6 @@ import json
 import os
 import socket
 import sqlite3
-import sys
 import threading
 import time
 import uuid
@@ -136,7 +135,7 @@ class DataBase:
             return cur.fetchall()
 
 class KafkaBus:
-    def __init__(self, bootstrap, log): #inicializar kafka producer con bootstrap y log, con ack=all y retries=3
+    def __init__(self, bootstrap, log): #inicializar kafka producer con bootstrap y log, con acks=all y retries=3
         from kafka import KafkaProducer
         self.bootstrap = bootstrap
         self.log = log
@@ -224,7 +223,7 @@ def normalize_duration(value):
         return DEFAULT_DURATION
     return d if 0 < d <= MAX_DURATION else DEFAULT_DURATION
 
-class Central:
+class Central: # Clase central que contiene la DB y KAFKA bus
     def __init__(self, db, bus):
         self.db = db
         self.bus = bus
@@ -234,13 +233,13 @@ class Central:
         self._load_stations()
 
 ####FUNCIONES ÚTILES
-    def log(self, text):
+    def log(self, text): # Escribir actividades en el log
         line = f"[{datetime.now().strftime('%H:%M:%S')}] {text}"
         with self.lock:
             self.messages.append(line)
         print(line, flush=True)
 
-    def _publish(self, topic, payload):
+    def _publish(self, topic, payload): #Mandar un mensaje a Kafka bus
         try:
             self.bus.publish(topic, payload)
         except Exception as e:
