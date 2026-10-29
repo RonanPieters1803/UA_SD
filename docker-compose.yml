@@ -1,158 +1,42 @@
-version: '3.8'
-
-x-env: &common-env
-  KAFKA_HOST: zephyr.proxy.rlwy.net
-  KAFKA_PORT: "12362"
-  CENTRAL_HOST: caboose.proxy.rlwy.net
-  CENTRAL_PORT: "53982"
-
 services:
-  # ================= ESTACIÓN 1 =================
-  monitor-1:
-    build: .
-    container_name: monitor_ws_1
-    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_1 "Valencia"
-    restart: unless-stopped
-
-  engine-1:
-    build: .
-    container_name: engine_ws_1
+  central:
+    build: ./central
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      PORT: "8080"
+      SOCKET_PORT: "5000"
+      DB_PATH: /app/data/wm_central.db
+      OPERATORS: "op1,op2,op3"
+    ports:
+      - "8080:8080"
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
     depends_on:
-      - monitor-1
-    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-1 6000 15.5
+      kafka:
+        condition: service_healthy
     restart: unless-stopped
 
-  # ================= ESTACIÓN 2 =================
-  monitor-2:
-    build: .
-    container_name: monitor_ws_2
-    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_2 "Alicante"
-    restart: unless-stopped
-
-  engine-2:
-    build: .
-    container_name: engine_ws_2
-    depends_on:
-      - monitor-2
-    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-2 6000 12.0
-    restart: unless-stopped
-
-  # ================= ESTACIÓN 3 =================
-  monitor-3:
-    build: .
-    container_name: monitor_ws_3
-    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_3 "Castellón"
-    restart: unless-stopped
-
-  engine-3:
-    build: .
-    container_name: engine_ws_3
-    depends_on:
-      - monitor-3
-    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-3 6000 18.0
-    restart: unless-stopped
-
-  # ================= ESTACIÓN 4 =================
-  monitor-4:
-    build: .
-    container_name: monitor_ws_4
-    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_4 "Madrid"
-    restart: unless-stopped
-
-  engine-4:
-    build: .
-    container_name: engine_ws_4
-    depends_on:
-      - monitor-4
-    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-4 6000 15.0
-    restart: unless-stopped
-
-  # ================= ESTACIÓN 5 =================
-  monitor-5:
-    build: .
-    container_name: monitor_ws_5
-    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_5 "Barcelona"
-    restart: unless-stopped
-
-  engine-5:
-    build: .
-    container_name: engine_ws_5
-    depends_on:
-      - monitor-5
-    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-5 6000 20.0
-    restart: unless-stopped
-
-  # ================= ESTACIÓN 6 =================
-  monitor-6:
-    build: .
-    container_name: monitor_ws_6
-    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_6 "Sevilla"
-    restart: unless-stopped
-
-  engine-6:
-    build: .
-    container_name: engine_ws_6
-    depends_on:
-      - monitor-6
-    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-6 6000 14.5
-    restart: unless-stopped
-
-  # ================= ESTACIÓN 7 =================
-  monitor-7:
-    build: .
-    container_name: monitor_ws_7
-    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_7 "Málaga"
-    restart: unless-stopped
-
-  engine-7:
-    build: .
-    container_name: engine_ws_7
-    depends_on:
-      - monitor-7
-    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-7 6000 16.0
-    restart: unless-stopped
-
-  # ================= ESTACIÓN 8 =================
-  monitor-8:
-    build: .
-    container_name: monitor_ws_8
-    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_8 "Bilbao"
-    restart: unless-stopped
-
-  engine-8:
-    build: .
-    container_name: engine_ws_8
-    depends_on:
-      - monitor-8
-    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-8 6000 10.0
-    restart: unless-stopped
-
-  # ================= ESTACIÓN 9 =================
-  monitor-9:
-    build: .
-    container_name: monitor_ws_9
-    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_9 "Zaragoza"
-    restart: unless-stopped
-
-  engine-9:
-    build: .
-    container_name: engine_ws_9
-    depends_on:
-      - monitor-9
-    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-9 6000 17.5
-    restart: unless-stopped
-
-  # ================= ESTACIÓN 10 =================
-  monitor-10:
-    build: .
-    container_name: monitor_ws_10
-    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_10 "Murcia"
-    restart: unless-stopped
-
-  engine-10:
-    build: .
-    container_name: engine_ws_10
-    depends_on:
-      - monitor-10
-    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-10 6000 13.0
+  kafka:
+    image: apache/kafka:3.9.1
+    hostname: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
     restart: unless-stopped

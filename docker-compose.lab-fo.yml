@@ -1,0 +1,23 @@
+x-fo: &fo
+  build: ./fo
+  stdin_open: true
+  tty: true
+  restart: unless-stopped
+
+services:
+  fo-1:
+    <<: *fo
+    container_name: fo_op1
+    command: ["${KAFKA_HOST}:${KAFKA_PORT}", "op1", "--file", "/app/servicios.txt"]
+    volumes:
+      - ./fo/servicios.txt:/app/servicios.txt:ro
+
+  fo-2:
+    <<: *fo
+    container_name: fo_op2
+    command: ["${KAFKA_HOST}:${KAFKA_PORT}", "op2"]
+
+  fo-3:
+    <<: *fo
+    container_name: fo_op3
+    command: ["${KAFKA_HOST}:${KAFKA_PORT}", "op3"]
