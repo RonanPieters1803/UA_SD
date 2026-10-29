@@ -255,7 +255,7 @@ class Central: # Clase central que contiene la DB y KAFKA bus
             op = op.strip()
             if op:
                 self.db.execute("INSERT OR IGNORE INTO operators(id, name) VALUES (?, ?)", (op, op))
-            self.log(f"Operarios dados de alta: "+", " .join(r["id"] for r in self.db.query("SELECT id FROM operators ORDER BY id")))
+        self.log(f"Operarios dados de alta: "+", " .join(r["id"] for r in self.db.query("SELECT id FROM operators ORDER BY id")))
 
     def operator_exists(self, id):
         return bool(self.db.query("SELECT 1 FROM operators WHERE id = ?", (id,)))
