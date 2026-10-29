@@ -4,9 +4,9 @@ from datetime import datetime
 from kafka import KafkaConsumer, KafkaProducer, TopicPartition
 
 #Nombres de los topics de Kafka
-TOPIC_FO_REQUESTS = "wm_fo_requests"
-TOPIC_FO_EVENTS = "wm_fo_events" 
-TOPIC_WS_STATUS = "wm_ws_status"
+TOPIC_FO_REQUESTS = "wm_fo_requests" #FO -> CENTRAL
+TOPIC_FO_EVENTS = "wm_fo_events"     #CENTRAL -> FO
+TOPIC_WS_STATUS = "wm_ws_status"     #CENTRAL -> TODOS
 DEFAULT_DURATION = 30
 
 lock = threading.Lock()
@@ -16,8 +16,7 @@ estaciones = []   # ultimo estado publicado por CENTRAL
 def log(msg):
     print(f"[WM_FO] {datetime.now().strftime('%H:%M:%S')} {msg}", flush=True)
 
-def create_consumer(broker):
-    """Sin grupo y posicionado al final: asignacion inmediata, no se pierden los primeros eventos."""
+def crear_consumidor(broker):
     topics = [TOPIC_FO_EVENTS, TOPIC_WS_STATUS]
     while True:
         consumer = None
@@ -42,7 +41,7 @@ def create_consumer(broker):
                     pass
             time.sleep(3)
 
-def listen(consumer, operator_id):
+def escuchar(consumer, operator_id):
     global estaciones
     while True:
         try:
@@ -121,8 +120,8 @@ def main():
         except Exception as e:
             log(f"Esperando a Kafka en {args.broker} ({e})")
             time.sleep(3)
-    consumer = create_consumer(args.broker)
-    threading.Thread(target=listen, args=(consumer, args.operator_id), daemon=True).start()
+    consumer = crear_consumidor(args.broker)
+    threading.Thread(target=escuchar, args=(consumer, args.operator_id), daemon=True).start()
     log(f"Operario {args.operator_id} conectado a Kafka ({args.broker}).")
 
     def send(ws_id, duration):
