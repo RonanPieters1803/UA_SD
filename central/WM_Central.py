@@ -250,6 +250,13 @@ class Central: # Clase central que contiene la DB y KAFKA bus
             self.stations[row["id"]] = Station(row["id"], row["location"], bool(row["blocked"]))
         self.log(f"Central iniciada: {len(self.stations)} WS en BD")
 
+    def add_operators(self, ids):
+        for op in ids:
+            op = op.strip()
+            if op:
+                self.db.execute("INSERT OR IGNORE INTO operators(id, name) VALUES (?, ?)", (op, op))
+        self.log(f"Operarios dados de alta: "+", " .join(r["id"] for r in self.db.query("SELECT id FROM operators ORDER BY id")))
+
     def add_operator(self, op_id):
         op_id = str(op_id).strip()
         if (not op_id or len(op_id) > 32
