@@ -18,6 +18,7 @@ autenticacion_recibida = threading.Event()
 cerrar_monitor = threading.Event()
 engine_funcionando = threading.Event()
 engine_averiado = threading.Event()
+engine_averiado.set()
 conexion_central_activa = None
 envio_central_lock = threading.Lock()
 engine_recuperado_pendiente = threading.Event()
@@ -34,7 +35,7 @@ def lrc(data) -> int:
 
 def empaquetar_trama(mensaje: str) -> bytes:
     datos = mensaje.encode('utf-8')
-    return bytes([STX]) + datos + bytes([ETX], lrc(datos))
+    return bytes([STX]) + datos + bytes([ETX, lrc(datos)])
 
 def leer_byte(sock: socket.socket) -> int:
     b = sock.recv(1)
@@ -76,30 +77,31 @@ def enviar_estado_central(conexion_central, estado):
 def _enviar_estado_central_bloqueado(conexion_central, estado):
     if conexion_central is None or conexion_central_activa is not conexion_central:
         return False
-    # Heartbeats silenciosos (OK) no se envían a Central, solo averías
-    if estado == "OK" and not engine_funcionando.is_set():
-        return True
     
-    if estado in ("LEAK", "LEAK_END"):
-        resp = enviar_mensaje_central(conexion_central, estado)
-        if resp and resp.startswith("OK"):
-            print(f"Estado {estado} enviado a la central con éxito.")
-            return True
-        return False
-    return True
+    # Se envía la notificación o el PING a la Central para mantener el socket activo
+    resp = enviar_mensaje_central(conexion_central, estado)
+    return resp is not None
 
 def enviar_heartbeat_central(conexion_central):
+    last_ping = time.time()
     while not cerrar_monitor.wait(1):
         with envio_central_lock:
+            now = time.time()
             if engine_recuperado_pendiente.is_set():
                 estado_a_enviar = "LEAK_END"
+            elif engine_averiado.is_set():
+                estado_a_enviar = "LEAK"
+            elif now - last_ping >= 15:  # Enviar PING cada 15s para no superar los 30s de la Central
+                estado_a_enviar = f"PING#{ID}"
+                last_ping = now
             else:
-                estado_a_enviar = "LEAK" if engine_averiado.is_set() else "OK"
+                continue
                 
-            if not _enviar_estado_central_bloqueado(conexion_central, estado_a_enviar):
+            if _enviar_estado_central_bloqueado(conexion_central, estado_a_enviar):
+                if estado_a_enviar == "LEAK_END":
+                    engine_recuperado_pendiente.clear()
+            else:
                 break
-            if estado_a_enviar == "LEAK_END":
-                engine_recuperado_pendiente.clear()
 
 def declarar_engine_averiado():
     engine_funcionando.clear()
@@ -118,7 +120,7 @@ def declarar_engine_recuperado(conexion_central):
 def escuchar_central():
     global resultado_autenticacion, conexion_central_activa
 
-    while True:
+    while not cerrar_monitor.is_set():
         conexion_central = None
         try:
             with socket.create_connection((ip_central, port_central), timeout=5) as central_socket:
@@ -139,19 +141,21 @@ def escuchar_central():
                     resultado_autenticacion = "OK"
                     autenticacion_recibida.set()
                     print(f"Autenticacion de la central: {respuesta}.")
-                    
-                    threading.Thread(
+
+                    hb_thread = threading.Thread(
                         target=enviar_heartbeat_central,
                         args=(central_socket,),
                         daemon=True,
-                    ).start()
-                    
+                    )
+                    hb_thread.start()
+
+                    # Notificar a Central que el Engine aún no está conectado (LEAK)
                     if engine_averiado.is_set():
                         enviar_estado_central(central_socket, "LEAK")
                         
-                    # Mantener el socket vivo leyendo hasta que se caiga
-                    while True:
-                        time.sleep(1)
+                    # Espera a que el hilo de heartbeat/envío detecte una caída de socket
+                    hb_thread.join()
+                    raise ConnectionError("Se perdió la conexión socket con la Central")
                 else:
                     resultado_autenticacion = "KO"
                     autenticacion_recibida.set()

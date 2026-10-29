@@ -1,0 +1,178 @@
+version: '3.8'
+
+x-env: &common-env
+  KAFKA_HOST: zephyr.proxy.rlwy.net
+  KAFKA_PORT: "12362"
+  CENTRAL_HOST: caboose.proxy.rlwy.net
+  CENTRAL_PORT: "53982"
+
+services:
+  # ================= ESTACIÓN 1 =================
+  monitor-1:
+    build: .
+    container_name: monitor_ws_1
+    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_1 "Valencia"
+    restart: unless-stopped
+
+  engine-1:
+    build: .
+    container_name: engine_ws_1
+    stdin_open: true  
+    tty: true         
+    depends_on:
+      - monitor-1
+    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-1 6000 15.5
+    restart: unless-stopped
+
+  # ================= ESTACIÓN 2 =================
+  monitor-2:
+    build: .
+    container_name: monitor_ws_2
+    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_2 "Alicante"
+    restart: unless-stopped
+
+  engine-2:
+    build: .
+    container_name: engine_ws_2
+    stdin_open: true  
+    tty: true         
+    depends_on:
+      - monitor-2
+    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-2 6000 12.0
+    restart: unless-stopped
+
+  # ================= ESTACIÓN 3 =================
+  monitor-3:
+    build: .
+    container_name: monitor_ws_3
+    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_3 "Castellón"
+    restart: unless-stopped
+
+  engine-3:
+    build: .
+    container_name: engine_ws_3
+    stdin_open: true  
+    tty: true         
+    depends_on:
+      - monitor-3
+    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-3 6000 18.0
+    restart: unless-stopped
+
+  # ================= ESTACIÓN 4 =================
+  monitor-4:
+    build: .
+    container_name: monitor_ws_4
+    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_4 "Madrid"
+    restart: unless-stopped
+
+  engine-4:
+    build: .
+    container_name: engine_ws_4
+    stdin_open: true  
+    tty: true         
+    depends_on:
+      - monitor-4
+    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-4 6000 15.0
+    restart: unless-stopped
+
+  # ================= ESTACIÓN 5 =================
+  monitor-5:
+    build: .
+    container_name: monitor_ws_5
+    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_5 "Barcelona"
+    restart: unless-stopped
+
+  engine-5:
+    build: .
+    container_name: engine_ws_5
+    stdin_open: true  
+    tty: true         
+    depends_on:
+      - monitor-5
+    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-5 6000 20.0
+    restart: unless-stopped
+
+  # ================= ESTACIÓN 6 =================
+  monitor-6:
+    build: .
+    container_name: monitor_ws_6
+    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_6 "Sevilla"
+    restart: unless-stopped
+
+  engine-6:
+    build: .
+    container_name: engine_ws_6
+    stdin_open: true
+    tty: true
+    depends_on:
+      - monitor-6
+    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-6 6000 14.5
+    restart: unless-stopped
+
+  # ================= ESTACIÓN 7 =================
+  monitor-7:
+    build: .
+    container_name: monitor_ws_7
+    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_7 "Málaga"
+    restart: unless-stopped
+
+  engine-7:
+    build: .
+    container_name: engine_ws_7
+    stdin_open: true  
+    tty: true         
+    depends_on:
+      - monitor-7
+    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-7 6000 16.0
+    restart: unless-stopped
+
+  # ================= ESTACIÓN 8 =================
+  monitor-8:
+    build: .
+    container_name: monitor_ws_8
+    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_8 "Bilbao"
+    restart: unless-stopped
+
+  engine-8:
+    build: .
+    container_name: engine_ws_8
+    stdin_open: true  
+    tty: true         
+    depends_on:
+      - monitor-8
+    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-8 6000 10.0
+    restart: unless-stopped
+
+  # ================= ESTACIÓN 9 =================
+  monitor-9:
+    build: .
+    container_name: monitor_ws_9
+    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_9 "Zaragoza"
+    restart: unless-stopped
+
+  engine-9:
+    build: .
+    container_name: engine_ws_9
+    stdin_open: true  
+    tty: true         
+    depends_on:
+      - monitor-9
+    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-9 6000 17.5
+    restart: unless-stopped
+
+  # ================= ESTACIÓN 10 =================
+  monitor-10:
+    build: .
+    container_name: monitor_ws_10
+    command: python WM_WS_M.py 6000 caboose.proxy.rlwy.net 53982 WS_10 "Murcia"
+    restart: unless-stopped
+
+  engine-10:
+    build: .
+    container_name: engine_ws_10
+    stdin_open: true  
+    tty: true         
+    depends_on:
+      - monitor-10
+    command: python WM_WS_E.py zephyr.proxy.rlwy.net 12362 monitor-10 6000 13.0
+    restart: unless-stopped

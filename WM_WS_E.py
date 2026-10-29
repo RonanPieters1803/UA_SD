@@ -28,7 +28,7 @@ ID = ""
 id_operario = ""
 current_request_id = None
 tiempo = -1
-sistema_habilitado = False
+sistema_habilitado = True
 productor_kafka = None
 irrigacion_stop = threading.Event()
 irrigacion_stop.set()
@@ -45,8 +45,8 @@ def lrc(data) -> int:
     return r
 
 def empaquetar_trama(mensaje: str) -> bytes:
-    datos = mensaje.encode('utf-8')
-    return bytes([STX]) + datos + bytes([ETX], lrc(datos))
+  datos = mensaje.encode('utf-8')
+  return bytes([STX]) + datos + bytes([ETX, lrc(datos)]) 
 
 def leer_byte(sock: socket.socket) -> int:
     b = sock.recv(1)
@@ -87,6 +87,7 @@ def simular_averia() -> None:
 def menu_operario() -> None:
     while True:
         try:
+            print("\nComandos: averia | recuperar | on | off | stop | start [duracion_segundos]")
             opcion = input("Engine> ").strip().lower()
         except EOFError: return
         if not opcion: continue
