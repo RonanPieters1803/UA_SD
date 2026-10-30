@@ -1,5 +1,6 @@
 x-fo: &fo
   build: ./WM_FO
+  network_mode: host
   stdin_open: true
   tty: true
   restart: unless-stopped
