@@ -401,6 +401,7 @@ class Central: # Clase central que contiene la DB y KAFKA bus
                 return
             st.leak = True
             self.log(f"{ws_id}: FUGA detectada")
+            time.sleep(5)
             self._abort_pending(st, "fuga detectada en la WS")
             if st.session:
                 self._close_session(st, "FUGA")
