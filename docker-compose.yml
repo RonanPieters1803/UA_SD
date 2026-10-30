@@ -1,6 +1,6 @@
 services:
   central:
-    build: ./central
+    build: ./WM_Central
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
       PORT: "8080"
