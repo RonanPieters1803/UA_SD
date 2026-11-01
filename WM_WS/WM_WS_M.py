@@ -33,16 +33,19 @@ def lrc(data) -> int:
         r ^= b
     return r
 
+#Transforma un mensaje en bytes con el formato de trama: STX + datos + ETX + LRC
 def empaquetar_trama(mensaje: str) -> bytes:
     datos = mensaje.encode('utf-8')
     return bytes([STX]) + datos + bytes([ETX, lrc(datos)])
 
+#Lee un unico byte del socket y lo devuelve como entero.
 def leer_byte(sock: socket.socket) -> int:
     b = sock.recv(1)
     if not b:
         raise ConnectionError("Conexion cerrada")
     return b[0]
 
+#Lee el socket de forma continua hasta encontrar STX (inicio de trama), lee el mensaje hasta ETX y se valida la integridad con LRC y devuelve el mensaje decodificado en UTF-8. 
 def recibir_trama(sock: socket.socket) -> str:
     while leer_byte(sock) != STX:
         pass
@@ -58,8 +61,8 @@ def recibir_trama(sock: socket.socket) -> str:
     return datos.decode('utf-8', errors='replace')
 
 # --- LOGICA PRINCIPAL DEL MONITOR ---
+#Envía un mensaje a la Central respetando el protocolo de tramas y ACK.
 def enviar_mensaje_central(conexion, mensaje):
-    """Envía un mensaje a la Central respetando el protocolo de tramas y ACK."""
     try:
         conexion.sendall(empaquetar_trama(mensaje))
         if leer_byte(conexion) == ACK:
@@ -69,19 +72,19 @@ def enviar_mensaje_central(conexion, mensaje):
     except Exception as e:
         print(f"Error enviando mensaje '{mensaje}' a Central: {e}")
     return None
-
+#Función simple que envia un estado a la Central, bloqueando el acceso al socket para evitar colisiones de envío. Devuelve True si se envió correctamente, False si no se pudo enviar.
 def enviar_estado_central(conexion_central, estado):
     with envio_central_lock:
         return _enviar_estado_central_bloqueado(conexion_central, estado)
 
+#funcion interna que envia un estado a la Central, asumiendo que el acceso al socket ya está bloqueado. Devuelve True si se envió correctamente, False si no se pudo enviar.
 def _enviar_estado_central_bloqueado(conexion_central, estado):
     if conexion_central is None or conexion_central_activa is not conexion_central:
         return False
-    
-    # Se envía la notificación o el PING a la Central para mantener el socket activo
     resp = enviar_mensaje_central(conexion_central, estado)
     return resp is not None
 
+#funcion que envia un heartbeat a la central cada 15 segundos, o envia un estado de avería o recuperación si corresponde. Se ejecuta en un hilo separado y termina si se cierra el monitor o si se pierde la conexión con la central.
 def enviar_heartbeat_central(conexion_central):
     last_ping = time.time()
     while not cerrar_monitor.wait(1):
@@ -103,12 +106,14 @@ def enviar_heartbeat_central(conexion_central):
             else:
                 break
 
+#funcion quem en caso de no recibir el heartbeat del engine o recibir un estado KO, declara el engine como averiado y envia un estado LEAK a la central. Se ejecuta en el hilo principal del monitor.
 def declarar_engine_averiado():
     engine_funcionando.clear()
     if not engine_averiado.is_set():
         engine_averiado.set()
         enviar_estado_central(conexion_central_activa, "LEAK")
 
+#funcion que en caso de recibir un estado OK del engine, declara el engine como recuperado y envia un estado LEAK_END a la central. Se ejecuta en el hilo principal del monitor.
 def declarar_engine_recuperado(conexion_central):
     with envio_central_lock:
         if engine_averiado.is_set():
@@ -117,6 +122,7 @@ def declarar_engine_recuperado(conexion_central):
             if _enviar_estado_central_bloqueado(conexion_central, "LEAK_END"):
                 engine_recuperado_pendiente.clear()
 
+#Funcion que escucha en bucle continuo la conexión con la central, realiza el handshake inicial, la autenticación y luego lanza un hilo para enviar heartbeat y estados. Si se pierde la conexión, intenta reconectar cada 5 segundos. Si la autenticación es rechazada, cierra el monitor.
 def escuchar_central():
     global resultado_autenticacion, conexion_central_activa
 
@@ -171,6 +177,7 @@ def escuchar_central():
                     conexion_central_activa = None
         time.sleep(5)
 
+#Funcion que sirve como servidor para el engine, aceptando conexiones y enviando el ID tras la autenticación. Luego entra en un bucle de heartbeat con el engine, declarando avería si no responde o si envía KO. Se ejecuta en el hilo principal del monitor.
 def servir_engine():
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as servidor:
@@ -239,6 +246,7 @@ def servir_engine():
         print(f"Error en servidor para el engine: {error}")
         sys.exit(1)
 
+#Se inicia un hilo para escuchar a la central y se ejecuta la función principal de servir al engine. Si se cierra el monitor, se termina el programa.
 threading.Thread(target=escuchar_central, daemon=True).start()
 servir_engine()
 if cerrar_monitor.is_set():

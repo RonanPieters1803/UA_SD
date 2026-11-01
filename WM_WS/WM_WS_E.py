@@ -44,15 +44,18 @@ def lrc(data) -> int:
     for b in data: r^=b
     return r
 
+#Transforma un mensaje en bytes con el formato de trama: STX + datos + ETX + LRC
 def empaquetar_trama(mensaje: str) -> bytes:
   datos = mensaje.encode('utf-8')
   return bytes([STX]) + datos + bytes([ETX, lrc(datos)]) 
 
+#Lee un unico byte del socket y lo devuelve como entero.
 def leer_byte(sock: socket.socket) -> int:
     b = sock.recv(1)
     if not b: raise ConnectionError("Conexion cerrada")
     return b[0]
 
+#Lee el socket de forma continua hasta encontrar STX (inicio de trama), lee el mensaje hasta ETX y se valida la integridad con LRC y devuelve el mensaje decodificado en UTF-8. 
 def recibir_trama(sock: socket.socket) -> str:
     while leer_byte(sock) != STX: pass
     datos = bytearray()
@@ -65,6 +68,7 @@ def recibir_trama(sock: socket.socket) -> str:
     return datos.decode('utf-8')
 
 # --- LOGICA DEL ENGINE ---
+#Señal lanzada dentro de engine o por los otros modulos para detener el riego, esperando a que se cierre el hilo de riego antes de continuar. El string pasado como parametro es el motivo de parada, por defecto "parada" indicando fin de riego manual.
 def detener_riego(motivo: str = "parada") -> None:
     global irrigacion_thread, motivo_fin_riego
     if isinstance(irrigacion_thread, threading.Thread) and irrigacion_thread.is_alive():
@@ -74,6 +78,7 @@ def detener_riego(motivo: str = "parada") -> None:
         irrigacion_thread.join()
         irrigacion_thread = None
 
+# Simula una averia en el engine, bloqueando el riego y enviando un mensaje de error al monitor.
 def simular_averia() -> None:
     if averia_engine.is_set(): return
     averia_engine.set()
@@ -84,6 +89,7 @@ def simular_averia() -> None:
             except OSError: pass
     detener_riego("averia")
 
+# Menu de comandos para el operario, ejecutado en un hilo aparte. Permite simular averias, recuperar el engine, encender/apagar el sistema y arrancar/detener riegos manualmente.
 def menu_operario() -> None:
     while True:
         try:
@@ -105,6 +111,7 @@ def menu_operario() -> None:
                 except ValueError: continue
             procesar_instruccion_kafka(msg)
 
+#Función que escucha en bucle continuo las señales de vida que envia el monitor local. Responde con un OK si funciona, KO si se averia. Si pierde conexión con el monitor, intenta reconectarse cada 5 segundos.
 def responder_heartbeat() -> None:
     global ID, monitor_socket
     while True:
@@ -130,6 +137,7 @@ def responder_heartbeat() -> None:
             monitor_socket = None
             time.sleep(5)
 
+#Funcion que envia los datos especificados de riego hacia central por kafka con el TOPIC_WS_EVENTS.
 def enviar_telemetria(operario: str, segundo: int) -> None:
     volumen_acumulado = float((caudal_l_min * Decimal(segundo) / Decimal(60)).quantize(Decimal("0.000001")))
     mensaje = {
@@ -143,6 +151,7 @@ def enviar_telemetria(operario: str, segundo: int) -> None:
     try: productor_kafka.send(TOPIC_WS_EVENTS, value=json.dumps(mensaje).encode("utf-8"))
     except: pass
 
+#Funcion que envia un resumen final del riego hacia central por kafka con el TOPIC_WS_EVENTS, incluyendo la duracion total y el volumen total de agua regada.
 def enviar_resumen_riego(operario: str, duracion_segundos: float, motivo_fin: str) -> None:
     duracion = round(duracion_segundos, 3)
     volumen = float((caudal_l_min * Decimal(str(duracion_segundos)) / Decimal(60)).quantize(Decimal("0.000001")))
@@ -158,6 +167,7 @@ def enviar_resumen_riego(operario: str, duracion_segundos: float, motivo_fin: st
     try: productor_kafka.send(TOPIC_WS_EVENTS, value=json.dumps(resumen).encode("utf-8"))
     except: pass
 
+#Funcion que ejecuta el riego en un bucle, usando la funcion de enviar_telemetria para enviar información cada segundo hasta que se cumpla la duracion especificada o se reciba una señal de parada. Al finalizar, envia un resumen del riego.
 def bucle_riego(operario: str, duracion: int) -> None:
     inicio = time.monotonic()
     segundo = 0
@@ -179,6 +189,7 @@ def bucle_riego(operario: str, duracion: int) -> None:
     finally:
         enviar_resumen_riego(operario, time.monotonic() - inicio, motivo_fin)
 
+#Funcion que procesa el mensaje como diccionario recibido desde kafka y procesa la instruccion de riego. 
 def procesar_instruccion_kafka(mensaje: dict) -> None:
     global id_operario, tiempo, sistema_habilitado, irrigacion_thread, motivo_fin_riego, current_request_id
     
@@ -191,7 +202,6 @@ def procesar_instruccion_kafka(mensaje: dict) -> None:
     instruccion = instruccion.strip().upper()
 
     if instruccion == "START" and not sistema_habilitado:
-        # Enviar denegación a central para no bloquear el timer
         denial = {"ws_id": ID, "event": "DENIED", "request_id": req_id, "message": "Sistema OFF"}
         productor_kafka.send(TOPIC_WS_EVENTS, value=json.dumps(denial).encode('utf-8'))
         return
@@ -212,7 +222,6 @@ def procesar_instruccion_kafka(mensaje: dict) -> None:
             id_operario = operario
             tiempo = duracion
             
-            # Evento crucial para que Central autorice y arranque el timer real de riego
             started_msg = {
                 "ws_id": ID,
                 "event": "STARTED",
@@ -226,6 +235,7 @@ def procesar_instruccion_kafka(mensaje: dict) -> None:
             irrigacion_thread = threading.Thread(target=bucle_riego, args=(id_operario, tiempo), daemon=True)
             irrigacion_thread.start()
 
+# Función que escucha en bucle continuo la conexión con el monitor local para recibir el ID del WS y responder a los heartbeats. Si pierde conexión, intenta reconectarse cada 5 segundos. Una vez conectado, lanza hilos para responder a heartbeats y para el menú de operario.
 def escuchar_monitor() -> None:
     global ID, monitor_socket
     while True:
@@ -241,6 +251,7 @@ def escuchar_monitor() -> None:
     threading.Thread(target=responder_heartbeat, daemon=True).start()
     threading.Thread(target=menu_operario, daemon=True).start()
 
+# Función que escucha en bucle continuo los mensajes de Kafka en el topic TOPIC_WS_COMMANDS y procesa las instrucciones recibidas. Si se recibe un mensaje con ws_id que coincide con el ID del WS, "ALL" o None, se procesa la instrucción. Si ocurre una avería en el engine, se ignoran los mensajes hasta que se recupere.
 def escuchar_kafka() -> None:
     global productor_kafka
     brokers = [f"{ip_kafka}:{port_kafka}"]
@@ -260,5 +271,6 @@ def escuchar_kafka() -> None:
         productor_kafka.close()
         if monitor_socket: monitor_socket.close()
 
+#Se inician los programas principales.
 escuchar_monitor()
 escuchar_kafka()
