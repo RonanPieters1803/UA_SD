@@ -142,6 +142,7 @@ class KafkaBus:
         self.producer = KafkaProducer(
             bootstrap_servers=bootstrap,
             value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode("utf-8"), #Crear un productor de Kafka que convierte los mensajes a JSON y los codifica en UTF-8
+            key_serializer=lambda k: k.encode("utf-8") if k is not None else None,
             acks="all",
             retries=3,
         )
@@ -160,8 +161,8 @@ class KafkaBus:
         except Exception as e: #El broker puede tener auto-creación activada, en ese caso no hace falta crear los topics
             self.log(f"Error al crear topics: {e}")
 
-    def publish(self,topic, payload): #Publicar un mensaje de forma asíncrona en un topic de Kafka, logueando el resultado
-        future = self.producer.send(topic, payload)
+    def publish(self,topic, payload, key=None): #Publicar un mensaje de forma asíncrona en un topic de Kafka, logueando el resultado
+        future = self.producer.send(topic, payload, key=key)
         future.add_errback(lambda e: self.log(f"Error al publicar mensaje en {topic}: {e}"))
 
     def consume_forever(self, handler): #Bucle infinito que consume mensajes de Kafka y los pasa a un handler
@@ -239,9 +240,9 @@ class Central: # Clase central que contiene la DB y KAFKA bus
             self.messages.append(line)
         print(line, flush=True)
 
-    def _publish(self, topic, payload): #Mandar un mensaje a Kafka bus
+    def _publish(self, topic, payload, key=None): #Mandar un mensaje a Kafka bus
         try:
-            self.bus.publish(topic, payload)
+            self.bus.publish(topic, payload, key=key)
         except Exception as e:
             self.log(f"Error publicando en {topic}: {e}")
 
@@ -310,7 +311,7 @@ class Central: # Clase central que contiene la DB y KAFKA bus
             return out
 
     def publish_status(self):
-        self._publish(TOPIC_WS_STATUS, {"ts": time.time(), "stations": self.snapshot()})
+        self._publish(TOPIC_WS_STATUS, {"ts": time.time(), "stations": self.snapshot()}, key="ALL")
 
     def panel_state(self):
         stations = self.snapshot()
