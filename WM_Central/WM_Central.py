@@ -161,7 +161,7 @@ class KafkaBus:
         except Exception as e: #El broker puede tener auto-creación activada, en ese caso no hace falta crear los topics
             self.log(f"Error al crear topics: {e}")
 
-    def publish(self,topic, payloadm key=None): #Publicar un mensaje de forma asíncrona en un topic de Kafka, logueando el resultado
+    def publish(self,topic, payload, key=None): #Publicar un mensaje de forma asíncrona en un topic de Kafka, logueando el resultado
         future = self.producer.send(topic, payload, key=key)
         future.add_errback(lambda e: self.log(f"Error al publicar mensaje en {topic}: {e}"))
 
