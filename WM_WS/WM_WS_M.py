@@ -35,7 +35,7 @@ def lrc(data) -> int:
 
 def empaquetar_trama(mensaje: str) -> bytes:
     datos = mensaje.encode('utf-8')
-    return bytes([STX]) + datos + bytes([ETX, lrc(datos)])
+    return bytes([STX]) + datos + bytes([ETX], lrc(datos)])
 
 def leer_byte(sock: socket.socket) -> int:
     b = sock.recv(1)
