@@ -5,3 +5,9 @@ Dibuja en texto la secuencia ENQ/ACK, trama, ACK/NACK, respuesta, ACK entre Moni
 ¿Cuáles dirias tú que en este proyecto son las estrategias de resiliencias más efectivas y más necesarias?
 Explícame paso a paso como despliego mi proyecto en github junto con Kafka en Railway
 Siendo esto mi dockerfile por favor explicame como puede crear nuevos operarios con dockerfile y docker-compose
+Me podrias implementar un menu enviado por un hilo que utilice los comandos: averia, recuperar, on, off, stop start [duración]. Hazlo con un match case para estar ordenado.
+Necesito una función llamada procesar_instruccion que reciba un diccionario. Si el diccionario tiene la orden 'OFF' o 'BLOCK', debe poner sistema_habilitado a False. Si recibe 'ON' o 'ACTIVATE', la pone a True. Si recibe 'START', tiene que comprobar primero si el sistema está habilitado; si no lo está, debe devolver un mensaje de denegado y salir sin hacer nada.
+Como puedo hacer que el bucle de envio que tengo tarde exactamente un segundo sin tardar mas o menos?
+¿Cómo uso wait(timeout) del evento en lugar de time.sleep() para que reaccione rápido si se cierra?
+Tengo una función que actualiza el estado del sistema, pero puede ser llamada por varios hilos a la vez. ¿Me explicas cómo usar un threading.Lock() y la sentencia with en Python para asegurar que solo un hilo pueda cambiar la variable global estado_actual a la vez?
+Podrias ponernos un ejemplo de implementación de kafka?
