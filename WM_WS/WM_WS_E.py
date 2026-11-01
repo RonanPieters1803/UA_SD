@@ -47,7 +47,7 @@ def lrc(data) -> int:
 #Transforma un mensaje en bytes con el formato de trama: STX + datos + ETX + LRC
 def empaquetar_trama(mensaje: str) -> bytes:
   datos = mensaje.encode('utf-8')
-  return bytes([STX]) + datos + bytes([ETX], lrc(datos)]) 
+  return bytes([STX]) + datos + bytes([ETX, lrc(datos)])
 
 #Lee un unico byte del socket y lo devuelve como entero.
 def leer_byte(sock: socket.socket) -> int:
