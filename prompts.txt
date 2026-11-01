@@ -1,0 +1,7 @@
+Tengo un sistema con CENTRAL, Monitor, Engine y Field Operator. El enunciado exige sockets entre Monitor y CENTRAL, y Kafka para el resto. Explícame qué criterios usarías para decidir qué comunicación va por sockets y cuál por Kafka
+Quiero definir los topics de Kafka (peticiones de FO, eventos a FO, comandos a WS, eventos de WS, estado global). Cuál usarias tu?
+Explícame con un ejemplo a mano cómo se calcula el LRC como XOR byte a byte de 'REG#WS_1#Alicante'.
+Dibuja en texto la secuencia ENQ/ACK, trama, ACK/NACK, respuesta, ACK entre Monitor y CENTRAL. Quiero revisar si mi implementación cubre el caso de NACK y reintentos
+¿Cuáles dirias tú que en este proyecto son las estrategias de resiliencias más efectivas y más necesarias?
+Explícame paso a paso como despliego mi proyecto en github junto con Kafka en Railway
+Siendo esto mi dockerfile por favor explicame como puede crear nuevos operarios con dockerfile y docker-compose
