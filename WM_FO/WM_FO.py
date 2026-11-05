@@ -9,7 +9,7 @@ TOPIC_FO_EVENTS = "wm_fo_events"     #CENTRAL -> FO
 TOPIC_WS_STATUS = "wm_ws_status"     #CENTRAL -> TODOS
 DEFAULT_DURATION = 30
 
-ARRANQUE = time.time()
+OFFSETS_ARRANQUE = {}
 
 lock = threading.Lock()
 pendientes = {}   # request_id -> Event (se activa con el evento final)
@@ -19,31 +19,37 @@ def log(msg):
     print(f"[WM_FO] {datetime.now().strftime('%H:%M:%S')} {msg}", flush=True)
 
 def crear_consumidor(broker, operator_id):
+    global OFFSETS_ARRANQUE
+
     topics = [TOPIC_FO_EVENTS, TOPIC_WS_STATUS]
     while True:
         consumer = None
         try:
             consumer = KafkaConsumer(
                 bootstrap_servers=broker,
-                group_id=f"fo-{operator_id}", 
+                group_id=f"fo-{operator_id}",
                 enable_auto_commit=False,
-                auto_offset_reset="latest")
+                auto_offset_reset="latest"
+            )
             tps = []
-            for t in topics:
-                parts = consumer.partitions_for_topic(t)
-                if not parts:
-                    raise RuntimeError(f"el topic {t} aun no existe (CENTRAL arrancada?)")
-                tps += [TopicPartition(t, p) for p in sorted(parts)]
+            for topic in topics:
+                parts = consumer.partitions_for_topic(topic)
+                if not parts: raise RuntimeError(f"el topic {topic} aun no existe (CENTRAL arrancada?)")
+                tps.extend(TopicPartition(topic, partition) for partition in sorted(parts))
+
             consumer.assign(tps)
             fin = consumer.end_offsets(tps)
+            OFFSETS_ARRANQUE = dict(fin)
+
             for tp in tps:
                 if tp.topic == TOPIC_FO_EVENTS:
-                        committed = consumer.committed(tp)
-                        consumer.seek(tp, committed if committed is not None else fin[tp])
+                    committed = consumer.committed(tp)
+                    consumer.seek(tp,committed if committed is not None else fin[tp])
                 elif tp.topic == TOPIC_WS_STATUS:
-                        consumer.seek(tp, max(0, fin[tp] - 1))
-            consumer.commit()
+                    consumer.seek(tp, max(0, fin[tp] - 1))
+
             return consumer
+
         except Exception as e:
             log(f"Esperando a Kafka en {broker} ({e})")
             if consumer is not None:
@@ -53,8 +59,10 @@ def crear_consumidor(broker, operator_id):
                     pass
             time.sleep(3)
 
+
 def escuchar(consumer, operator_id):
     global estaciones
+
     while True:
         try:
             for rec in consumer:
@@ -62,24 +70,40 @@ def escuchar(consumer, operator_id):
                     m = json.loads(rec.value.decode("utf-8"))
                 except (ValueError, UnicodeError):
                     m = None
-                if isinstance(m, dict):
-                    if rec.topic == TOPIC_FO_EVENTS and m.get("operator_id") == operator_id:
-                        recuperado = m.get("ts", time.time()) < ARRANQUE
-                        if recuperado:
-                            if m.get("final") is True:
-                                log(f"[RECUPERADO] {m.get('ws_id')} | {m.get('event')}: {m.get('message', '')}")
-                            else:
-                                log(f"{m.get('ws_id')} | {m.get('event')}: {m.get('message', '')}")
-                    if m.get("final"):
+
+                if not isinstance(m, dict):
+                    consumer.commit()
+                    continue
+
+                if rec.topic == TOPIC_WS_STATUS:
+                    stations = m.get("stations", [])
+                    if isinstance(stations, list):
                         with lock:
-                            ev = pendientes.get(m.get("request_id"))
-                        if ev:
-                            ev.set()
-                elif rec.topic == TOPIC_WS_STATUS:
-                    with lock:
-                        estaciones = m.get("stations", [])
-            if rec.topic in TOPIC_FO_EVENTS:
+                            estaciones = stations
+
+                elif rec.topic == TOPIC_FO_EVENTS:
+                    if m.get("operator_id") == operator_id:
+                        tp = TopicPartition(rec.topic, rec.partition)
+                        limite = OFFSETS_ARRANQUE.get(tp, rec.offset)
+                        recuperado = rec.offset < limite
+                        es_final = m.get("final") is True
+
+                        if recuperado:
+                            if es_final:
+                                log(f"[RECUPERADO] {m.get('ws_id')} | "f"{m.get('event')}: {m.get('message', '')}")
+                        else:
+                            log(f"{m.get('ws_id')} | {m.get('event')}: "f"{m.get('message', '')}")
+
+                        if es_final:
+                            with lock:
+                                ev = pendientes.get(m.get("request_id"))
+                            if ev:
+                                ev.set()
+                                with lock:
+                                    pendientes.pop(m.get("request_id"), None)
+
                 consumer.commit()
+
         except Exception as e:
             log(f"Error escuchando eventos: {e}")
             time.sleep(2)
@@ -156,7 +180,6 @@ def main():
         if args.services_file:
             for ws_id, dur in leer_servicios(args.services_file):
                 ev = send(ws_id, dur)
-                # Esperar a la conclusion (exito o fracaso) y 4 s antes del siguiente servicio
                 if not ev.wait(timeout=dur + 30):
                     log(f"Sin respuesta final de CENTRAL para {ws_id}")
                 time.sleep(4)
