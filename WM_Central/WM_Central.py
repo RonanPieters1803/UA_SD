@@ -387,6 +387,8 @@ class Central: # Clase central que contiene la DB y KAFKA bus
             return "KO#no autenticado", False
         if len(parts) > 1 and parts[1].strip() != conn.ws_id:
             return "KO#id no coincide con la sesión", True
+        if op == "PING":
+            return "OK", True
         if op == "LEAK":
             self.on_leak(conn.ws_id)
             return "OK", True
