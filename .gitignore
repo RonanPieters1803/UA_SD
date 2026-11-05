@@ -4,4 +4,6 @@ producer_kafka.py
 consumer_kafka.py
 compose.yml
 __pycache__
-data/wm_central.db
+/data
+/venv
+.env

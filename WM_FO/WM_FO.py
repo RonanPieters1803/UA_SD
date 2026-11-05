@@ -9,6 +9,8 @@ TOPIC_FO_EVENTS = "wm_fo_events"     #CENTRAL -> FO
 TOPIC_WS_STATUS = "wm_ws_status"     #CENTRAL -> TODOS
 DEFAULT_DURATION = 30
 
+ARRANQUE = time.time()
+
 lock = threading.Lock()
 pendientes = {}   # request_id -> Event (se activa con el evento final)
 estaciones = []   # ultimo estado publicado por CENTRAL
@@ -16,12 +18,16 @@ estaciones = []   # ultimo estado publicado por CENTRAL
 def log(msg):
     print(f"[WM_FO] {datetime.now().strftime('%H:%M:%S')} {msg}", flush=True)
 
-def crear_consumidor(broker):
+def crear_consumidor(broker, operator_id):
     topics = [TOPIC_FO_EVENTS, TOPIC_WS_STATUS]
     while True:
         consumer = None
         try:
-            consumer = KafkaConsumer(bootstrap_servers=broker, group_id=None, enable_auto_commit=False)
+            consumer = KafkaConsumer(
+                bootstrap_servers=broker,
+                group_id=f"fo-{operator_id}", 
+                enable_auto_commit=False,
+                auto_offset_reset="latest")
             tps = []
             for t in topics:
                 parts = consumer.partitions_for_topic(t)
@@ -29,8 +35,12 @@ def crear_consumidor(broker):
                     raise RuntimeError(f"el topic {t} aun no existe (CENTRAL arrancada?)")
                 tps += [TopicPartition(t, p) for p in sorted(parts)]
             consumer.assign(tps)
+            fin = consumer.end_offsets(tps)
             for tp in tps:
-                consumer.position(tp)
+                if tp.topic == TOPIC_FO_EVENTS:
+                        committed = consumer.committed(tp)
+                consumer.seek(tp, committed if committed is not None else fin[tp])
+            consumer.commit()
             return consumer
         except Exception as e:
             log(f"Esperando a Kafka en {broker} ({e})")
@@ -49,11 +59,13 @@ def escuchar(consumer, operator_id):
                 try:
                     m = json.loads(rec.value.decode("utf-8"))
                 except (ValueError, UnicodeError):
-                    continue
-                if not isinstance(m, dict):
-                    continue
-                if rec.topic == TOPIC_FO_EVENTS and m.get("operator_id") == operator_id:
-                    log(f"{m.get('ws_id')} | {m.get('event')}: {m.get('message', '')}")
+                    m = None
+                if isinstance(m, dict):
+                    if rec.topic == TOPIC_FO_EVENTS and m.get("operator_id") == operator_id:
+                        recuperado = m.get("ts", time.time()) < ARRANQUE
+                        if not (recuperado and m.get("event") == "PROGRESS"):
+                            etiqueta = "[RECUPERADO] " if recuperado else ""
+                            log(f"{etiqueta}{m.get('ws_id')} | {m.get('event')}: {m.get('message', '')}")
                     if m.get("final"):
                         with lock:
                             ev = pendientes.get(m.get("request_id"))
@@ -62,6 +74,8 @@ def escuchar(consumer, operator_id):
                 elif rec.topic == TOPIC_WS_STATUS:
                     with lock:
                         estaciones = m.get("stations", [])
+            if rec.topic in TOPIC_FO_EVENTS:
+                consumer.commit()
         except Exception as e:
             log(f"Error escuchando eventos: {e}")
             time.sleep(2)
@@ -108,7 +122,6 @@ def main():
     p.add_argument("broker", help="Kafka bootstrap, por ejemplo localhost:9092")
     p.add_argument("operator_id", help="ID del operario dado de alta en CENTRAL")
     p.add_argument("--file", dest="services_file", help="JSON/JSONL con solicitudes")
-    p.add_argument("--group", default=None, help="Grupo Kafka opcional para eventos")
     args = p.parse_args()
     producer = None
     while producer is None:
@@ -120,7 +133,7 @@ def main():
         except Exception as e:
             log(f"Esperando a Kafka en {args.broker} ({e})")
             time.sleep(3)
-    consumer = crear_consumidor(args.broker)
+    consumer = crear_consumidor(args.broker, args.operator_id)
     threading.Thread(target=escuchar, args=(consumer, args.operator_id), daemon=True).start()
     log(f"Operario {args.operator_id} conectado a Kafka ({args.broker}).")
 
