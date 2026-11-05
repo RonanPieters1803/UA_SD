@@ -39,7 +39,9 @@ def crear_consumidor(broker, operator_id):
             for tp in tps:
                 if tp.topic == TOPIC_FO_EVENTS:
                         committed = consumer.committed(tp)
-                consumer.seek(tp, committed if committed is not None else fin[tp])
+                        consumer.seek(tp, committed if committed is not None else fin[tp])
+                elif tp.topic == TOPIC_WS_STATUS:
+                        consumer.seek(tp, max(0, fin[tp] - 1))
             consumer.commit()
             return consumer
         except Exception as e:
@@ -63,9 +65,11 @@ def escuchar(consumer, operator_id):
                 if isinstance(m, dict):
                     if rec.topic == TOPIC_FO_EVENTS and m.get("operator_id") == operator_id:
                         recuperado = m.get("ts", time.time()) < ARRANQUE
-                        if not (recuperado and m.get("event") == "PROGRESS"):
-                            etiqueta = "[RECUPERADO] " if recuperado else ""
-                            log(f"{etiqueta}{m.get('ws_id')} | {m.get('event')}: {m.get('message', '')}")
+                        if recuperado:
+                            if m.get("final") is True:
+                                log(f"[RECUPERADO] {m.get('ws_id')} | {m.get('event')}: {m.get('message', '')}")
+                            else:
+                                log(f"{m.get('ws_id')} | {m.get('event')}: {m.get('message', '')}")
                     if m.get("final"):
                         with lock:
                             ev = pendientes.get(m.get("request_id"))
