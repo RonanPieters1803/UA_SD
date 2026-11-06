@@ -16,32 +16,34 @@ services:
   fo-2:
     <<: *fo
     container_name: fo_op2
-    command: ["${KAFKA_HOST}:${KAFKA_PORT}", "op1", "--file", "/app/servicios.txt"]
+    command: ["${KAFKA_HOST}:${KAFKA_PORT}", "op2", "--file", "/app/servicios.txt"]
     volumes:
       - ./WM_FO/servicios.txt:/app/servicios.txt:ro
 
   fo-3:
     <<: *fo
     container_name: fo_op3
-    command: ["${KAFKA_HOST}:${KAFKA_PORT}", "op1", "--file", "/app/servicios.txt"]
+    command: ["${KAFKA_HOST}:${KAFKA_PORT}", "op3", "--file", "/app/servicios.txt"]
     volumes:
       - ./WM_FO/servicios.txt:/app/servicios.txt:ro
 
   fo-4:
     <<: *fo
     container_name: fo_op4
-    command: ["${KAFKA_HOST}:${KAFKA_PORT}", "op1", "--file", "/app/servicios.txt"]
+    command: ["${KAFKA_HOST}:${KAFKA_PORT}", "op4", "--file", "/app/servicios.txt"]
     volumes:
       - ./WM_FO/servicios.txt:/app/servicios.txt:ro
 
   fo-5:
     <<: *fo
     container_name: fo_op5
-    command: ["${KAFKA_HOST}:${KAFKA_PORT}", "op1", "--file", "/app/servicios.txt"]
+    command: ["${KAFKA_HOST}:${KAFKA_PORT}", "op5", "--file", "/app/servicios.txt"]
     volumes:
       - ./WM_FO/servicios.txt:/app/servicios.txt:ro
 
   fo-6:
     <<: *fo
     container_name: fo_op6
-    command: ["${KAFKA_HOST}:${KAFKA_PORT}", "op6"]
+    command: ["${KAFKA_HOST}:${KAFKA_PORT}", "op6", "--file", "/app/servicios.txt"]
+    volumes:
+      - ./WM_FO/servicios.txt:/app/servicios.txt:ro
